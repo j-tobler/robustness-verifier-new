@@ -50,6 +50,7 @@ module StringUtils {
       if IsDigit(s[i]) {
         r := r * 10 + (ParseDigit(s[i]));
       }
+      i := i + 1;
     }
     if neg {
       r := r * (-1);
