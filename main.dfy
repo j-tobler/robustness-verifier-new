@@ -12,20 +12,34 @@ module MainModule {
   method Main(args: seq<string>)
     decreases *
   {
+    // parse command line arguments
+    if |args| != 3 || !StringUtils.IsInt(args[2]) {
+      print "Usage: main <neural_network_input.txt> <GRAM_ITERATIONS>\n";
+      return;
+    }
+
+    var GRAM_ITERATIONS: int := StringUtils.ParseInt(args[2]);
+    if GRAM_ITERATIONS <= 0 {
+      print "<GRAM_ITERATIONS> should be positive";
+      return;
+    }
+
+    var L := new LipschitzBounds(GRAM_ITERATIONS);
+    
     /* ===================== Generate Lipschitz bounds ===================== */
     // Parse neural network from file (unverified).
     print "Parsing...\n";
-    var neuralNetStr: string := ReadFromFile("Input/neural_network_3.txt");
+    var neuralNetStr: string := ReadFromFile(args[1]);
     var maybeNeuralNet: (bool, NeuralNetwork) := ParseNeuralNet(neuralNetStr);
     expect maybeNeuralNet.0, "Failed to parse neural network.";
     var neuralNet: NeuralNetwork := maybeNeuralNet.1;
     // Generate spectral norms for the matrices comprising the neural net.
     // We currently assume an external implementation for generating these.
     print "Generating spectral norms...\n";
-    var specNorms: seq<real> := GenerateSpecNorms(neuralNet);
+    var specNorms: seq<real> := GenerateSpecNorms(L, neuralNet);
     // Generate the Lipschitz bounds for each logit in the output vector.
     print "Generating Lipschitz bounds...\n";
-    var lipBounds: seq<real> := GenLipBounds(neuralNet, specNorms);
+    var lipBounds: seq<real> := GenLipBounds(L, neuralNet, specNorms);
     print "Bounds generated:\n";
     for i: nat := 0 to |lipBounds| {
       // BasicArithmetic.PrintReal(lipBounds[i], 20);

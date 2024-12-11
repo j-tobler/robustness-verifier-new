@@ -3,9 +3,6 @@ include "basic_arithmetic.dfy"
 module Lipschitz {
   import opened BasicArithmetic
 
-  // maximum number of iterations to run the gram-iteration algorithm for
-  const GRAM_ITERATIONS := 6
-
   /* ================================ Types ================================ */
 
   /* A vector is a non-empty sequence of reals. */
@@ -174,7 +171,7 @@ module Lipschitz {
   }
 
   /** Generates the spectral norm for each matrix in n. */
-  method GenerateSpecNorms(n: NeuralNetwork) returns (r: seq<real>)
+  method GenerateSpecNorms(L: LipschitzBounds, n: NeuralNetwork) returns (r: seq<real>)
     ensures |r| == |n|
     ensures forall i | 0 <= i < |n| :: IsSpecNormUpperBound(r[i], n[i])
   {
@@ -185,7 +182,7 @@ module Lipschitz {
       invariant forall j | 0 <= j < i :: IsSpecNormUpperBound(r[j], n[j])
     {
       if DEBUG { print "Generating spectral norm ", i, " of ", |n|, "...\n"; }
-      var specNorm := GramIterationSimple(n[i]);
+      var specNorm := L.GramIterationSimple(n[i]);
       assert specNorm >= SpecNorm(n[i]);
       r := r + [specNorm];
       i := i + 1;
@@ -294,34 +291,42 @@ module Lipschitz {
   //   if |v| == 1 then [v[0] / x] else [v[0] / x] + VectorDiv(v[1..], x)
   // }
 
-  method GramIterationSimple(G: Matrix) returns (s: real)
-    ensures IsSpecNormUpperBound(s, G)
-  {
-    var i := 0;
-    var G' := G;
-    while i != GRAM_ITERATIONS
-      invariant 0 <= i <= GRAM_ITERATIONS
-      invariant SpecNorm(G) <= Power2Root(SpecNorm(G'), i)
-    {
-      if DEBUG { print "Gram iteration for matrix of size ", |G|, "x", |G[0]|, ". Iteration ", i+1, " of ", GRAM_ITERATIONS, "\n"; }
-      Assumption1(G');
-      Power2RootMonotonic(SpecNorm(G'), Sqrt(SpecNorm(MM(Transpose(G'), G'))), i);
-      G' := MM(Transpose(G'), G');
-      Power2RootDef(SpecNorm(G'), i);
-      i := i + 1;
-    }
-    if DEBUG { print "Gram iteration done iterating\n"; }
-    Assumption2(G');
-    Power2RootMonotonic(SpecNorm(G'), FrobeniusNorm(G'), GRAM_ITERATIONS);
-    if DEBUG { print "Gram iteration computing frobenius norm upper bound...\n"; }
-    s := FrobeniusNormUpperBound(G');
-    Power2RootMonotonic(FrobeniusNorm(G'), s, GRAM_ITERATIONS);
-    if DEBUG { print "Gram iteration computing square root upper bound...\n"; }
-    s := Power2RootUpperBound(s, GRAM_ITERATIONS);
-    SpecNormUpperBoundProperty(s, G);
-    if DEBUG { print "Gram iteration done\n"; }
-  }
+  class LipschitzBounds {
+    var GRAM_ITERATIONS: nat
 
+    constructor(G: nat) {
+      GRAM_ITERATIONS := G;
+    }
+    
+    method GramIterationSimple(G: Matrix) returns (s: real)
+      ensures IsSpecNormUpperBound(s, G)
+    {
+      var i := 0;
+      var G' := G;
+      while i != GRAM_ITERATIONS
+        invariant 0 <= i <= GRAM_ITERATIONS
+        invariant SpecNorm(G) <= Power2Root(SpecNorm(G'), i)
+      {
+        if DEBUG { print "Gram iteration for matrix of size ", |G|, "x", |G[0]|, ". Iteration ", i+1, " of ", GRAM_ITERATIONS, "\n"; }
+        Assumption1(G');
+        Power2RootMonotonic(SpecNorm(G'), Sqrt(SpecNorm(MM(Transpose(G'), G'))), i);
+        G' := MM(Transpose(G'), G');
+        Power2RootDef(SpecNorm(G'), i);
+        i := i + 1;
+      }
+      if DEBUG { print "Gram iteration done iterating\n"; }
+      Assumption2(G');
+      Power2RootMonotonic(SpecNorm(G'), FrobeniusNorm(G'), GRAM_ITERATIONS);
+      if DEBUG { print "Gram iteration computing frobenius norm upper bound...\n"; }
+      s := FrobeniusNormUpperBound(G');
+      Power2RootMonotonic(FrobeniusNorm(G'), s, GRAM_ITERATIONS);
+      if DEBUG { print "Gram iteration computing square root upper bound...\n"; }
+      s := Power2RootUpperBound(s, GRAM_ITERATIONS);
+      SpecNormUpperBoundProperty(s, G);
+      if DEBUG { print "Gram iteration done\n"; }
+    }
+  }
+  
   // method GramIterationSimple(G0: Matrix, N: int) returns (r: real)
   //   requires N >= 0
   //   ensures r >= SpecNorm(G0)
@@ -581,7 +586,7 @@ module Lipschitz {
    * Generates the Lipschitz bound for each logit in the output of the neural
    * network n. See GenLipBound for details.
    */
-  method GenLipBounds(n: NeuralNetwork, s: seq<real>) returns (r: seq<real>)
+  method GenLipBounds(L: LipschitzBounds, n: NeuralNetwork, s: seq<real>) returns (r: seq<real>)
     requires |s| == |n|
     requires forall i | 0 <= i < |s| :: IsSpecNormUpperBound(s[i], n[i])
     ensures |r| == |n[|n|-1]|
@@ -596,7 +601,7 @@ module Lipschitz {
       invariant forall j | 0 <= j < i ::
         0.0 <= r[j] && IsLipBound(n, r[j], j)
     {
-      var bound := GenLipBound(n, i, s);
+      var bound := GenLipBound(L, n, i, s);
       r := r + [bound];
       i := i + 1;
       assert forall j | 0 <= j < i :: IsLipBound(n, r[j], j) by {
@@ -613,7 +618,7 @@ module Lipschitz {
    * this by the spectral norm of the matrix [v], where v is the vector
    * corresponding to the l'th row of the final layer of n.
    */
-  method GenLipBound(n: NeuralNetwork, l: int, s: seq<real>) returns (r: real)
+  method GenLipBound(L: LipschitzBounds, n: NeuralNetwork, l: int, s: seq<real>) returns (r: real)
     requires |s| == |n|
     requires 0 <= l < |n[|n|-1]|
     requires forall i | 0 <= i < |s| :: IsSpecNormUpperBound(s[i], n[i])
@@ -621,7 +626,7 @@ module Lipschitz {
     ensures r >= 0.0
   {
     var trimmedLayer := [n[|n|-1][l]];
-    var trimmedSpecNorm := GramIterationSimple(trimmedLayer);
+    var trimmedSpecNorm := L.GramIterationSimple(trimmedLayer);
     var n' := n[..|n|-1] + [trimmedLayer];
     var s' := s[..|s|-1] + [trimmedSpecNorm];
     r := Product(s');
