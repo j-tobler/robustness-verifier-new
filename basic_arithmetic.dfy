@@ -74,7 +74,6 @@ module BasicArithmetic {
       invariant 0 <= j <= i
       invariant r >= Power2Root(x, i - j)
     {
-      if DEBUG { print "Power2RootUpperBound iteration ", i-j+1, " of ", i, "\n"; }
       MonotonicSqrt(Power2Root(x, i - j), r);
       r := SqrtUpperBound(r);
       j := j - 1;
@@ -98,7 +97,6 @@ module BasicArithmetic {
     while i < SQRT_ITERATIONS
       invariant r >= Sqrt(x) > 0.0
     {
-      if DEBUG { print "SqrtUpperBound iteration ", i, " of ", SQRT_ITERATIONS-1, "\n"; }
       var old_r := r;
       assert Sqrt(x) <= (r + x / r) / 2.0 by {
         assert 0.0 <= (r - Sqrt(x)) * (r - Sqrt(x)); // 0.0 <= any square

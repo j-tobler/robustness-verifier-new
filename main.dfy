@@ -13,57 +13,84 @@ module MainModule {
     decreases *
   {
     // parse command line arguments
-    if |args| != 3 || !StringUtils.IsInt(args[2]) {
+    if |args| != 3 {
       print "Usage: main <neural_network_input.txt> <GRAM_ITERATIONS>\n";
+      print "Usage: main <neural_network_input.txt> <lipshitz_bounds_input.txt>\n";      
       return;
     }
 
-    var GRAM_ITERATIONS: int := StringUtils.ParseInt(args[2]);
-    if GRAM_ITERATIONS <= 0 {
-      print "<GRAM_ITERATIONS> should be positive";
-      return;
-    }
-
-    var L := new LipschitzBounds(GRAM_ITERATIONS);
-    
-    /* ===================== Generate Lipschitz bounds ===================== */
     // Parse neural network from file (unverified).
-    print "Parsing...\n";
     var neuralNetStr: string := ReadFromFile(args[1]);
     var maybeNeuralNet: (bool, NeuralNetwork) := ParseNeuralNet(neuralNetStr);
     expect maybeNeuralNet.0, "Failed to parse neural network.";
     var neuralNet: NeuralNetwork := maybeNeuralNet.1;
-    // Generate spectral norms for the matrices comprising the neural net.
-    // We currently assume an external implementation for generating these.
-    print "Generating spectral norms...\n";
-    var specNorms: seq<real> := GenerateSpecNorms(L, neuralNet);
-    // Generate the Lipschitz bounds for each logit in the output vector.
-    print "Generating Lipschitz bounds...\n";
-    var lipBounds: seq<real> := GenLipBounds(L, neuralNet, specNorms);
-    print "Bounds generated:\n";
-    for i: nat := 0 to |lipBounds| {
-      // BasicArithmetic.PrintReal(lipBounds[i], 20);
-      print lipBounds[i];
-      print "\n\n";
+
+    var lipBounds: seq<real>;
+    
+    if StringUtils.IsInt(args[2]) {
+      var GRAM_ITERATIONS: int := StringUtils.ParseInt(args[2]);
+      if GRAM_ITERATIONS <= 0 {
+        print "<GRAM_ITERATIONS> should be positive";
+        return;
+      }
+      
+      var L := new LipschitzBounds(GRAM_ITERATIONS);
+    
+      /* ===================== Generate Lipschitz bounds ===================== */
+      // Generate spectral norms for the matrices comprising the neural net.
+      // We currently assume an external implementation for generating these.
+      print "Generating spectral norms...\n";
+      var specNorms: seq<real> := GenerateSpecNorms(L, neuralNet);
+      // Generate the Lipschitz bounds for each logit in the output vector.
+      print "Generating Lipschitz bounds...\n";
+      lipBounds := GenLipBounds(L, neuralNet, specNorms);
+      print "Generated Lipschitz bounds: ", lipBounds, "\n";      
+    }else{
+      var lipBoundsStr: string := ReadFromFile(args[2]);
+      var lb: seq<string> := StringUtils.Split(lipBoundsStr,'\n');
+      var line: string := lb[0];
+      var realsStr: seq<string> := StringUtils.Split(line,',');
+      var areReals: bool := AreReals(realsStr);
+      if !areReals {
+        print "Error: Lipschitz bounds is not a vector.\n";
+        return;
+      }
+      lipBounds := ParseReals(realsStr);
+      if |lipBounds| != |neuralNet[|neuralNet|-1]| {
+        print "Given Lipschitz bounds vector not compatible with neural network: \n";
+	print    "Lipschitz bounds vector has size: ", |lipBounds|, "\n";
+	return;
+      }
+      // FIXME: check bounds are positive and remove the first axiom
+      assume {:axiom} forall i | 0 <= i < |lipBounds| :: 0.0 <= lipBounds[i];
+      assume {:axiom} AreLipBounds(neuralNet, lipBounds);
+
+      print "WARNING: certifier trusting that given Lipschitz bounds are correct for the given neural network!\n";
     }
 
     /* ================= Repeatedly certify output vectors ================= */
 
-    while true
-      // This tells Dafny that we don't intend for this loop to terminate.
-      decreases *
-    {
-      /* ===================== Parse input from stdin ====================== */
+    var inputStr: string := ReadFromFile("/dev/stdin");
 
-      // Read from stdin. Currently, input must be terminated with an EOF char.
-      print "> ";
-      var inputStr: string := ReadFromFile("/dev/stdin");
-      print '\n';
-      // Extract output vector and error margin, which are space-separated.
-      var inputSeq: seq<string> := StringUtils.Split(inputStr, ' ');
+    // Extract output vector and error margin, which are space-separated.
+    var lines: seq<string> := StringUtils.Split(inputStr, '\n');
+    
+    if |lines| <= 0 {
+      print "No outputs to certify!";
+      return;
+    }
+
+    print "[\n";
+    var l := 0;
+    while l < |lines|
+      decreases |lines| - l
+    {
+      var line := lines[l];
+      l := l + 1;
+      var inputSeq: seq<string> := StringUtils.Split(line, ' ');
       if |inputSeq| != 2 {
         print "Error: Expected 1 space in input. Got ", |inputSeq| - 1, ".\n";
-        continue;
+	continue;
       }
       
       // Parse output vector.
@@ -91,11 +118,6 @@ module MainModule {
       }
       var errorMargin := StringUtils.ParseReal(inputSeq[1]);
 
-      // Print parse results.
-      print '\n';
-      print "Received output vector:\n", outputVector, "\n\n";
-      print "Received error margin:\n", errorMargin, "\n\n";
-
       /* ======================= Certify Robustness ======================== */
 
       // The given output vector must be compatible with the neural network.
@@ -113,8 +135,17 @@ module MainModule {
       assert robust ==> forall v: Vector |
         CompatibleInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
         Robust(v, outputVector, errorMargin, neuralNet);
-      print "Certification:\n", robust, "\n\n";
+
+      print "{\n";
+      print "\"output\": ";
+      print outputVector, ",\n";
+      print "\"radius\": ";
+      print errorMargin, ",\n";
+      print "\"certified\": ";
+      print robust, ",\n";
+      print "},\n";
     }
+    print "]\n";
   }
 
   method ParseNeuralNet(xs: string) returns (t: (bool, NeuralNetwork))

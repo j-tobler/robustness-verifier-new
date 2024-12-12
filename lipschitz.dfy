@@ -310,7 +310,11 @@ module Lipschitz {
         if DEBUG { print "Gram iteration for matrix of size ", |G|, "x", |G[0]|, ". Iteration ", i+1, " of ", GRAM_ITERATIONS, "\n"; }
         Assumption1(G');
         Power2RootMonotonic(SpecNorm(G'), Sqrt(SpecNorm(MM(Transpose(G'), G'))), i);
-        G' := MM(Transpose(G'), G');
+	if DEBUG { print "Gram iteration calling Transpose...\n"; }
+	var GT := Transpose(G');
+	if DEBUG { print "Gram iteration Transpose done; calling MM...\n"; }	
+        G' := MM(GT, G');
+	if DEBUG { print "Gram iteration calling MM done.\n"; }		
         Power2RootDef(SpecNorm(G'), i);
         i := i + 1;
       }
