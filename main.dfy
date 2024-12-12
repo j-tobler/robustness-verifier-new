@@ -76,7 +76,6 @@ module MainModule {
     var lines: seq<string> := StringUtils.Split(inputStr, '\n');
     
     if |lines| <= 0 {
-      print "No outputs to certify!";
       return;
     }
 
@@ -89,15 +88,17 @@ module MainModule {
       l := l + 1;
       var inputSeq: seq<string> := StringUtils.Split(line, ' ');
       if |inputSeq| != 2 {
-        print "Error: Expected 1 space in input. Got ", |inputSeq| - 1, ".\n";
-	continue;
+        // as soon as we see bad input, stop silently so that the end of the input won't cause junk to be printed
+	print "]\n";
+	return;
       }
       
       // Parse output vector.
       if inputSeq[0] == "" {
-        print "Error: The given output vector was found to be empty.\n";
-        continue;
+	print "]\n";      
+        return;
       }
+      
       var realsStr: seq<string> := StringUtils.Split(inputSeq[0], ',');
       var areReals: bool := AreReals(realsStr);
       if !areReals {
@@ -142,7 +143,7 @@ module MainModule {
       print "\"radius\": ";
       print errorMargin, ",\n";
       print "\"certified\": ";
-      print robust, ",\n";
+      print robust, "\n";
       print "},\n";
     }
     print "]\n";
