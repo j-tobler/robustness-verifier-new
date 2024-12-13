@@ -26,6 +26,7 @@ module MainModule {
     var neuralNet: NeuralNetwork := maybeNeuralNet.1;
 
     var lipBounds: seq<real>;
+    print "[\n";
     
     if StringUtils.IsInt(args[2]) {
       var GRAM_ITERATIONS: int := StringUtils.ParseInt(args[2]);
@@ -39,12 +40,15 @@ module MainModule {
       /* ===================== Generate Lipschitz bounds ===================== */
       // Generate spectral norms for the matrices comprising the neural net.
       // We currently assume an external implementation for generating these.
-      print "Generating spectral norms...\n";
       var specNorms: seq<real> := GenerateSpecNorms(L, neuralNet);
       // Generate the Lipschitz bounds for each logit in the output vector.
-      print "Generating Lipschitz bounds...\n";
       lipBounds := GenLipBounds(L, neuralNet, specNorms);
-      print "Generated Lipschitz bounds: ", lipBounds, "\n";      
+
+      print "{\n";
+      print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
+      print "  \"GRAM_ITERATIONS\": ", GRAM_ITERATIONS, ",\n";
+      print "  \"provenance\": \"generated\"\n";
+      print "}\n";      
     }else{
       var lipBoundsStr: string := ReadFromFile(args[2]);
       var lb: seq<string> := StringUtils.Split(lipBoundsStr,'\n');
@@ -64,8 +68,10 @@ module MainModule {
       // FIXME: check bounds are positive and remove the first axiom
       assume {:axiom} forall i | 0 <= i < |lipBounds| :: 0.0 <= lipBounds[i];
       assume {:axiom} AreLipBounds(neuralNet, lipBounds);
-
-      print "WARNING: certifier trusting that given Lipschitz bounds are correct for the given neural network!\n";
+      print "{\n";
+      print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
+      print "  \"provenance\": \"loaded from file\"\n";
+      print "}\n";      
     }
 
     /* ================= Repeatedly certify output vectors ================= */
@@ -79,7 +85,6 @@ module MainModule {
       return;
     }
 
-    print "[\n";
     var l := 0;
     while l < |lines|
       decreases |lines| - l
@@ -137,6 +142,7 @@ module MainModule {
         CompatibleInput(v, neuralNet) && NN(neuralNet, v) == outputVector ::
         Robust(v, outputVector, errorMargin, neuralNet);
 
+      print ",\n";
       print "{\n";
       print "\"output\": ";
       print outputVector, ",\n";
@@ -144,7 +150,7 @@ module MainModule {
       print errorMargin, ",\n";
       print "\"certified\": ";
       print robust, "\n";
-      print "},\n";
+      print "}\n";
     }
     print "]\n";
   }
@@ -315,7 +321,7 @@ module MainModule {
     var readResult := FileIO.ReadBytesFromFile(filename);
     expect readResult.Success?, "Unexpected failure reading from " +
       filename + ": " + readResult.error;
-    str := seq(|readResult.value|, 
+    str := seq(|readResult.value|,
       i requires 0 <= i < |readResult.value| => readResult.value[i] as char);
   }
 }

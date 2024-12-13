@@ -7,7 +7,7 @@ module BasicArithmetic {
   // satisfactory error margin for square roots, to optimise the algorithm
   const SQRT_ERR_MARGIN := 0.0000001
   // print debug messages
-  const DEBUG := true
+  const DEBUG := false
 
   /* ======================================================================= */
   /* =========================== Ghost Functions =========================== */
