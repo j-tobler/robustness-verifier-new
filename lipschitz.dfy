@@ -446,13 +446,11 @@ module Lipschitz {
       invariant b ==> forall j | 0 <= j < i && j != x ::
         v'[x] - L[x] * e > v'[j] + L[j] * e
     {
-      if i == x {
-        i := i + 1;
-        continue;
-      }
-      if v'[x] - L[x] * e <= v'[i] + L[i] * e {
-        b := false;
-        break;
+      if i != x {
+        if v'[x] - L[x] * e <= v'[i] + L[i] * e {
+          b := false;
+          break;
+        }
       }
       i := i + 1;
     }
