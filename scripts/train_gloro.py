@@ -38,7 +38,7 @@ def train_gloro(
         lr=0.001,
         lr_schedule='fixed',
         trades_schedule=None,
-        verbose=True,
+        verbose=False,
         INTERNAL_LAYER_SIZES=[64]
 ):
     _print = print_if_verbose(verbose)
@@ -211,44 +211,6 @@ def script(
     eval_accuracy = eval_results[1]
     print(f"model evaluation accuracy: {eval_accuracy}.")
 
-    print("Calculating Confusion Matrix")
-
-    labels = []
-    predicted_classes = []
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=ResourceWarning)
-
-    for image_batch, label_batch in ds_test:
-        predictions = g.predict(image_batch)
-        predicted_labels = np.argmax(predictions, axis=1)
-        labels.extend(label_batch.numpy())
-        predicted_classes.extend(predicted_labels)
-
-    print(np.max(labels))
-    print(np.max(predicted_classes))
-
-    # Calculate confusion matrix
-    conf_matrix = confusion_matrix(labels, predicted_classes)
-    print("Confusion Matrix")
-    print(conf_matrix)
-
-    if plot_confusion_matrix:
-        try:
-            plt.figure(figsize=(10, 7))
-            plt.imshow(conf_matrix, cmap='viridis', interpolation='nearest')
-            plt.colorbar()
-            plt.title('Confusion Matrix')
-            plt.xlabel('Predicted labels')
-            plt.ylabel('True labels')
-            plt.xticks(np.arange(11))
-            plt.yticks(np.arange(10))
-            plt.savefig('confusion_matrix.png')
-            plt.show()
-        except KeyboardInterrupt:
-            print("Plotting was interrupted.")
-        finally:
-            plt.close('all')
 
     print("SUMMARY")
     print(f"lr_schedule: {lr_schedule}")

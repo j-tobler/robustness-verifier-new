@@ -68,18 +68,54 @@ if ! which jq > /dev/null 2>&1; then
     exit 1
 fi
 
+# check we won't interfere with any concurrent execution of this same script
+if [ -d model_weights_csv ]; then
+    echo "Directory model_weights_csv/ still exists."
+    exit 1
+fi
 
 # clean out any old temporary model weights etc.
 rm -rf model_weights_csv
 
-MODEL_WEIGHTS_DIR="model_weights_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}"
-MODEL_OUTPUTS="all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
-NEURAL_NET_FILE="neural_net_mnist_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
-MODEL_OUTPUTS_EVAL="all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}.txt"
-RESULTS_JSON="results_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}_gram_${GRAM_ITERATIONS}.json"
+DT=$(date +"%Y-%m-%d_%H:%M:%S")
 
-# clean out old results of this script
-rm -rf "${MODEL_WEIGHTS_DIR}" "${MODEL_OUTPUTS}" "${NEURAL_NET_FILE}" "${MODEL_OUTPUTS_EVAL}" "${RESULTS_JSON}"
+if [ -d "${DT}" ]; then
+    echo "Directory ${DT}/ already exists!"
+    exit 1
+fi
+
+mkdir "${DT}"
+
+if [ ! -d "${DT}" ]; then
+    echo "Error creating directory ${DT}"
+    exit 1
+fi
+
+echo ""
+echo ""
+echo "Artifacts and results will live in: ${DT}/"
+echo ""
+
+PARAMS_FILE=${DT}/params.txt
+echo "    (Training) Gloro epsilon: ${EPSILON}" > "${PARAMS_FILE}"
+echo "    (Training) INTERNAL_LAYER_SIZES: ${INTERNAL_LAYER_SIZES}" >> "${PARAMS_FILE}"
+echo "    (Training) Epochs: ${EPOCHS}" >> "${PARAMS_FILE}"
+echo "    (Training) Batch size: ${BATCH_SIZE}" >> "${PARAMS_FILE}"
+echo "    (Certifier) Eval epsilon: ${EVAL_EPSILON}" >> "${PARAMS_FILE}"
+echo "    (Certifier) GRAM_ITERATIONS: ${GRAM_ITERATIONS}" >> "${PARAMS_FILE}"
+
+
+echo "Running with these parameters (saved in ${PARAMS_FILE}):"
+cat "$PARAMS_FILE"
+echo ""
+echo ""
+
+MODEL_WEIGHTS_DIR="${DT}/model_weights_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}"
+MODEL_OUTPUTS="${DT}/all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
+NEURAL_NET_FILE="${DT}/neural_net_mnist_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
+MODEL_OUTPUTS_EVAL="${DT}/all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}.txt"
+RESULTS_JSON="${DT}/results_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}_gram_${GRAM_ITERATIONS}.json"
+
 
 
 # train the gloro model
@@ -111,7 +147,15 @@ fi
 ${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR"
 
 
+echo ""
 echo "All done."
+echo "    (Training) Gloro epsilon: ${EPSILON}"
+echo "    (Training) INTERNAL_LAYER_SIZES: ${INTERNAL_LAYER_SIZES}"
+echo "    (Training) Epochs: ${EPOCHS}"
+echo "    (Training) Batch size: ${BATCH_SIZE}"
+echo "    (Certifier) Eval epsilon: ${EVAL_EPSILON}"
+echo "    (Certifier) GRAM_ITERATIONS: ${GRAM_ITERATIONS}"
+echo ""
 echo "Model weights saved in: ${MODEL_WEIGHTS_DIR}"
 echo "Model outputs saved in: ${MODEL_OUTPUTS}"
 echo "Neural network (for certifier) saved in: ${NEURAL_NET_FILE}"
