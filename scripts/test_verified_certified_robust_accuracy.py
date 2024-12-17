@@ -109,30 +109,36 @@ with open(json_results_file, 'r') as f:
     robustness = json.load(f)
 
 print("Evaluating Verified Certified Robust Accuracy...\n")
-i=0
+i=0 # robustness index
+j=0 # correct_classifications index
 count_robust_and_correct=0
 count_robust=0
 count_correct=0
-# the first item in this list is the Lipschitz bounds etc.
-assert len(robustness) == len(correct_classifications)+1
+# the first item in this list is the Lipschitz bounds; others may be debug messages etc.
+assert len(robustness) >= len(correct_classifications)+1
 robustness=robustness[1:]
-assert len(robustness) == len(correct_classifications)
+assert len(robustness) >= len(correct_classifications)
 n=len(robustness)
 while i<n:
     r = robustness[i]
-    robust = r["certified"]
-    correct = correct_classifications[i]
-    if robust and correct:
-        count_robust_and_correct=count_robust_and_correct+1
-    if robust:
-        count_robust=count_robust+1
-    if correct:
-        count_correct=count_correct+1
-    if i%1000==0:
-        print(f"...done {i} of {n} evaluations...\n");
+    if "certified" in r:
+        robust = r["certified"]
+        correct = correct_classifications[j]
+        if robust and correct:
+            count_robust_and_correct=count_robust_and_correct+1
+        if robust:
+            count_robust=count_robust+1
+        if correct:
+            count_correct=count_correct+1
+        if i%1000==0:
+            print(f"...done {i} of {n} evaluations...\n");
+        j=j+1
     i=i+1
 
-print(f"Proportion robust: {float(count_robust)/float(n)}")
-print(f"Proportion correct: {float(count_correct)/float(n)}")
-print(f"Proportion robust and correct: {float(count_robust_and_correct)/float(n)}")
+assert j==10000
+assert i>=10000
+
+print(f"Proportion robust: {float(count_robust)/float(10000)}")
+print(f"Proportion correct: {float(count_correct)/float(10000)}")
+print(f"Proportion robust and correct: {float(count_robust_and_correct)/float(10000)}")
 

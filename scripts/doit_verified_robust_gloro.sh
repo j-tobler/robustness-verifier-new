@@ -25,12 +25,12 @@ if ! [[ $GRAM_ITERATIONS =~ ^[0-9]+$ ]] || [ "$GRAM_ITERATIONS" -le 0 ]; then
     exit 1
 fi
 
-if ! [[ $EPOCHS =~ ^[0-9]+$ ]] || [ "$GRAM_ITERATIONS" -le 0 ]; then
+if ! [[ $EPOCHS =~ ^[0-9]+$ ]] || [ "$EPOCHS" -le 0 ]; then
     echo "EPOCHS should be positive"
     exit 1
 fi
 
-if ! [[ $BATCH_SIZE =~ ^[0-9]+$ ]] || [ "$GRAM_ITERATIONS" -le 0 ]; then
+if ! [[ $BATCH_SIZE =~ ^[0-9]+$ ]] || [ "$BATCH_SIZE" -le 0 ]; then
     echo "BATCH_SIZE should be positive"
     exit 1
 fi
@@ -42,6 +42,33 @@ fi
 
 PYTHON=python3
 
+# check for dependencies
+if ! which ${PYTHON} > /dev/null 2>&1; then
+    echo "Python binary ${PYTHON} not found. Consider editing the PYTHON variable in this script."
+    exit 1
+fi
+
+if ! which sed > /dev/null 2>&1; then
+    echo "sed not found."
+    exit 1
+fi
+
+if ! which tee > /dev/null 2>&1; then
+    echo "tee not found."
+    exit 1
+fi
+
+if ! which ts > /dev/null 2>&1; then
+    echo "ts not found."
+    exit 1
+fi
+
+if ! which jq > /dev/null 2>&1; then
+    echo "jq not found."
+    exit 1
+fi
+
+
 # clean out any old temporary model weights etc.
 rm -rf model_weights_csv
 
@@ -49,7 +76,7 @@ MODEL_WEIGHTS_DIR="model_weights_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EP
 MODEL_OUTPUTS="all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
 NEURAL_NET_FILE="neural_net_mnist_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}.txt"
 MODEL_OUTPUTS_EVAL="all_mnist_outputs_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}.txt"
-RESULTS_JSON="results_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}.json"
+RESULTS_JSON="results_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}_eval_${EVAL_EPSILON}_gram_${GRAM_ITERATIONS}.json"
 
 # clean out old results of this script
 rm -rf "${MODEL_WEIGHTS_DIR}" "${MODEL_OUTPUTS}" "${NEURAL_NET_FILE}" "${MODEL_OUTPUTS_EVAL}" "${RESULTS_JSON}"
@@ -73,10 +100,16 @@ ${PYTHON} make_certifier_format.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" 
 sed "s/$/ ${EVAL_EPSILON}/" "$MODEL_OUTPUTS" > "$MODEL_OUTPUTS_EVAL"
 
 
-echo "Running the certifier. This may take a while and there is no progress output..."
-cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" > "$RESULTS_JSON"
+echo "Running the certifier. This may take a while..."
+cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" | tee "$RESULTS_JSON" | ts
 
+if ! jq empty "$RESULTS_JSON"; then
+    echo "Certifier produced invalid JSON!"
+    exit 1
+fi
+    
 ${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR"
+
 
 echo "All done."
 echo "Model weights saved in: ${MODEL_WEIGHTS_DIR}"
