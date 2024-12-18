@@ -6,6 +6,35 @@ import os
 
 import sys
 
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Flatten, Dense, Layer
+
+class MinMax(Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self._flat_op = Flatten()
+
+    def call(self, x):
+        x_flat = self._flat_op(x)
+        x_shape = tf.shape(x_flat)
+
+        grouped_x = tf.reshape(
+            x_flat,
+            tf.concat([x_shape[:-1], (-1, 2)], -1))
+
+        min_x = tf.reduce_min(grouped_x, axis=-1, keepdims=True)
+        max_x = tf.reduce_max(grouped_x, axis=-1, keepdims=True)
+
+        sorted_x = tf.reshape(
+            tf.concat([min_x, max_x], axis=-1),
+            tf.shape(x))
+
+        return sorted_x
+
+    def lipschitz(self):
+        return 1.
+
 if len(sys.argv) != 4:
     print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES model_weights_csv_dir output_file\n");
     sys.exit(1)
@@ -19,8 +48,6 @@ output_file=sys.argv[3]
 print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
 
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Flatten, Dense
 
 def mprint(string):
     print(string, end="")

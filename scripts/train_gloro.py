@@ -17,6 +17,7 @@ from gloro.models import GloroNet
 from gloro.layers import Dense
 from gloro.layers import Flatten
 from gloro.layers import Input
+from gloro.layers import MinMax
 from gloro.training import losses
 from tensorflow.keras import backend as K
 from gloro.training.callbacks import EpsilonScheduler
@@ -66,8 +67,7 @@ def train_gloro(
     _print('compiling model...')
 
     g.compile(
-        # loss=losses.get(loss),
-        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        loss=losses.get(loss),
         optimizer=get_optimizer(optimizer, lr),
         metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
         # metrics=[rejection_rate]
@@ -236,11 +236,6 @@ epochs=int(sys.argv[3])
 
 print(f"Running with internal layer dimensions: {internal_layers}")
 
-# using values from Table B.1 in Leino et al. 2021 for epsilon_schedule, lr_schedule, lr, loss, and augmentation.
-# we use custom values for:
-#   batch_size -- Leino use 256 but this gives much worse Lipschitz bounds. Smaller batch size seems to do some kind of quasi-regularisation
-#   epochs     -- Leino use 500 eophcs but, perhaps because we use a far simpler neural net, optimal value for epochs seems to be about 3.
-#              -- larger values results in bigger Lipschitz bounds, as the model fits the data better
 script(
     dataset='mnist',
     epsilon=epsilon,
@@ -250,8 +245,9 @@ script(
     lr=1e-3,
     #lr_schedule='decay_after_half_to_0.000001',
     lr_schedule='decay_to_0.000001',
-    epochs=epochs, 
+    epochs=epochs,
+    # Table B.1 in Leino et al. lists "0.1,2.0,500" in the "loss" but for others it is 1.5 so ...
     #loss='sparse_trades_kl.1.5',
-    loss='crossentropy',    
+    loss='sparse_crossentropy',    
     augmentation='none',
     INTERNAL_LAYER_SIZES=internal_layers)
