@@ -1,6 +1,7 @@
 import utils
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.framework.ops import EagerTensor
 
 def build_mnist_model(Input, Flatten, Dense, input_size=28, internal_layer_sizes=[]):
     """set input_size to something smaller if the model is downsampled"""
@@ -32,22 +33,22 @@ def load_and_set_weights(csv_loc, internal_layer_sizes, model):
 
 
     
-def load_mnist_gloro_data(batch_size=256, augmentation='none', new_input_size=None):
-    """set new_input_size to resize the dataset. Returns a pair (train, test)"""
+def load_mnist_gloro_data(batch_size=256, augmentation='none', input_size=28):
+    """set input_size to resize the dataset. Returns a pair (train, test)"""
     train, test, metadata = utils.get_data('mnist', batch_size, augmentation)
 
     
-    if new_input_size:
+    if input_size != 28:
         def resize(image, label):
-            image = tf.image.resize(image, [new_input_size, new_input_size])  
+            image = tf.image.resize(image, [input_size, input_size])  
             return image, label
         train = train.map(resize)
         test = test.map(resize)
         
     return (train, test)
     
-def load_mnist_test_data(new_input_size=None):
-    """set new_input_size to resize the test dataset. Returns a pair (x_test, y_test)"""
+def load_mnist_test_data(input_size=28):
+    """set input_size to resize the test dataset. Returns a pair (x_test, y_test)"""
     # turn off SSL cert checking :(
     import ssl
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -55,10 +56,16 @@ def load_mnist_test_data(new_input_size=None):
     
     # Normalize pixel values to [0, 1]
     x_test = x_test.astype('float32') / 255.0
-
-    if new_input_size:
-        x_test = tf.image.resize(x_test[..., tf.newaxis], [new_input_size, new_input_size]).numpy()
-
+    if input_size != 28:
+        resized_tensor = tf.image.resize(x_test[..., tf.newaxis], [input_size, input_size])
+        if tf.executing_eagerly():
+            x_test=resized_tensor.numpy()
+        else:
+            # Convert the tensor to NumPy using a session
+            with tf.compat.v1.Session() as sess:
+                x_test = sess.run(resized_tensor)
+                x_test = np.squeeze(x_test, axis=-1)  # Remove the last dimension
+    
     # Convert labels to one-hot encoded format
     y_test = tf.keras.utils.to_categorical(y_test, num_classes=10)
 

@@ -1,14 +1,7 @@
 # train a gloro net
 
-if [ $# -ne 7 ]; then
-    echo "Usage $0 gloro_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size"
-    echo ""
-    echo "Optimal values based on testing for eval_epsilon=0.3 so far suggest: "
-    echo "  gloro_epsilon=0.45"
-    echo "  INTERNAL_LAYER_SIZES=[]"
-    echo "  GRAM_ITERATIONS=1 (well, it can't be anything else for performance reasons)"
-    echo "  epochs=3"
-    echo "  batch_size=32"
+if ! ([ $# -eq 7 ] || [ $# -eq 8 ]); then
+    echo "Usage $0 gloro_epsilon INTERNAL_LAYER_SIZES eval_epsilon robustness_certifier_binary GRAM_ITERATIONS epochs batch_size [model_input_size]"
     exit 1
 fi
 
@@ -19,6 +12,11 @@ CERTIFIER=$4
 GRAM_ITERATIONS=$5
 EPOCHS=$6
 BATCH_SIZE=$7
+
+INPUT_SIZE=28
+if [ $# -eq 8 ]; then
+    INPUT_SIZE=$8
+fi
 
 if ! [[ $GRAM_ITERATIONS =~ ^[0-9]+$ ]] || [ "$GRAM_ITERATIONS" -le 0 ]; then
     echo "GRAM_ITERATIONS should be positive"
@@ -32,6 +30,11 @@ fi
 
 if ! [[ $BATCH_SIZE =~ ^[0-9]+$ ]] || [ "$BATCH_SIZE" -le 0 ]; then
     echo "BATCH_SIZE should be positive"
+    exit 1
+fi
+
+if ! [[ $INPUT_SIZE =~ ^[0-9]+$ ]] || [ "$INPUT_SIZE" -le 0 ]; then
+    echo "MODEL_INPUT_SIZE should be positive"
     exit 1
 fi
 
@@ -97,7 +100,8 @@ echo "Artifacts and results will live in: ${DT}/"
 echo ""
 
 PARAMS_FILE=${DT}/params.txt
-echo "    (Training) Gloro epsilon: ${EPSILON}" > "${PARAMS_FILE}"
+echo "    (Global) Model input size: ${INPUT_SIZE}" > "${PARAMS_FILE}"
+echo "    (Training) Gloro epsilon: ${EPSILON}" >> "${PARAMS_FILE}"
 echo "    (Training) INTERNAL_LAYER_SIZES: ${INTERNAL_LAYER_SIZES}" >> "${PARAMS_FILE}"
 echo "    (Training) Epochs: ${EPOCHS}" >> "${PARAMS_FILE}"
 echo "    (Training) Batch size: ${BATCH_SIZE}" >> "${PARAMS_FILE}"
@@ -119,7 +123,7 @@ RESULTS_JSON="${DT}/results_epsilon_${EPSILON}_${INTERNAL_LAYER_SIZES}_${EPOCHS}
 
 
 # train the gloro model
-${PYTHON} train_gloro.py $EPSILON "$INTERNAL_LAYER_SIZES" $EPOCHS
+${PYTHON} train_gloro.py $EPSILON "$INTERNAL_LAYER_SIZES" $EPOCHS $INPUT_SIZE
 
 if [ ! -d model_weights_csv ]; then
     echo "Training gloro model failed or results not successfully saved to model_weights_csv/ dir"
@@ -129,7 +133,7 @@ fi
 # save the weights
 mv model_weights_csv "$MODEL_WEIGHTS_DIR"
 # make the outputs from the zero-bias model
-${PYTHON} zero_bias_saved_model.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" "$MODEL_OUTPUTS"
+${PYTHON} zero_bias_saved_model.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" "$MODEL_OUTPUTS" $INPUT_SIZE
 # make the neural net in a form the certifier can understand
 ${PYTHON} make_certifier_format.py "$INTERNAL_LAYER_SIZES" "$MODEL_WEIGHTS_DIR" > "$NEURAL_NET_FILE"
 # add the epsilon to each model output for the certifier to certify against
@@ -144,17 +148,12 @@ if ! jq empty "$RESULTS_JSON"; then
     exit 1
 fi
     
-${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR"
+${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR" $INPUT_SIZE
 
 
 echo ""
 echo "All done."
-echo "    (Training) Gloro epsilon: ${EPSILON}"
-echo "    (Training) INTERNAL_LAYER_SIZES: ${INTERNAL_LAYER_SIZES}"
-echo "    (Training) Epochs: ${EPOCHS}"
-echo "    (Training) Batch size: ${BATCH_SIZE}"
-echo "    (Certifier) Eval epsilon: ${EVAL_EPSILON}"
-echo "    (Certifier) GRAM_ITERATIONS: ${GRAM_ITERATIONS}"
+cat "$PARAMS_FILE"
 echo ""
 echo "Model weights saved in: ${MODEL_WEIGHTS_DIR}"
 echo "Model outputs saved in: ${MODEL_OUTPUTS}"

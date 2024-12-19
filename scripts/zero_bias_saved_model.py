@@ -37,8 +37,8 @@ class MinMax(Layer):
     def lipschitz(self):
         return 1.
 
-if len(sys.argv) != 4:
-    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES model_weights_csv_dir output_file\n");
+if len(sys.argv) != 5:
+    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES model_weights_csv_dir output_file input_size\n");
     sys.exit(1)
 
 INTERNAL_LAYER_SIZES=eval(sys.argv[1])
@@ -47,8 +47,10 @@ csv_loc=sys.argv[2]+"/"
 
 output_file=sys.argv[3]
 
-print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
+input_size=int(sys.argv[4])
 
+print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
+print(f"Running with input_size: {input_size}")
 
 
 def mprint(string):
@@ -64,7 +66,7 @@ def printlist(floatlist):
             if count<n:
                 mprint(",")
 
-inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, internal_layer_sizes=INTERNAL_LAYER_SIZES)
+inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, input_size=input_size, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 model = Model(inputs, outputs)
 
 print("Building zero-bias gloro model from saved weights...")
@@ -74,7 +76,7 @@ doitlib.load_and_set_weights(csv_loc, INTERNAL_LAYER_SIZES, model)
 # evaluate hte resulting model
 print("Evaluating the resulting zero-bias gloro model...")
 
-x_test, y_test = doitlib.load_mnist_test_data()
+x_test, y_test = doitlib.load_mnist_test_data(input_size=input_size)
 
 loss, accuracy = model.evaluate(x_test, y_test, verbose=2)
 

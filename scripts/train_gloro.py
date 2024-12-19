@@ -42,20 +42,21 @@ def train_gloro(
         lr_schedule='fixed',
         trades_schedule=None,
         verbose=False,
-        INTERNAL_LAYER_SIZES=[64]
+        INTERNAL_LAYER_SIZES=[64],
+        input_size=28
 ):
     _print = print_if_verbose(verbose)
 
     # Load data and set up data pipeline.
     _print('loading data...')
 
-    train, test = doitlib.load_mnist_gloro_data(batch_size=batch_size)
+    train, test = doitlib.load_mnist_gloro_data(batch_size=batch_size,input_size=input_size)
     
     
     # Create the model.
     _print('creating model...')
 
-    inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, internal_layer_sizes=INTERNAL_LAYER_SIZES)
+    inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, input_size=input_size, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 
     g = GloroNet(inputs, outputs, epsilon)
 
@@ -104,6 +105,7 @@ def script(
         plot_learning_curve=False,
         plot_confusion_matrix=False,
         INTERNAL_LAYER_SIZES=[64],
+        input_size=28,
 ):
 
     g = train_gloro(
@@ -118,7 +120,8 @@ def script(
         lr=lr,
         lr_schedule=lr_schedule,
         trades_schedule=trades_schedule,
-        INTERNAL_LAYER_SIZES=INTERNAL_LAYER_SIZES
+        INTERNAL_LAYER_SIZES=INTERNAL_LAYER_SIZES,
+        input_size=input_size
     )
 
     print('getting model accuracy numbers...')
@@ -214,8 +217,8 @@ def script(
 
 import sys
 
-if len(sys.argv) != 4:
-    print(f"Usage: {sys.argv[0]} epsilon INTERNAL_LAYER_SIZES epochs\n");
+if len(sys.argv) != 5:
+    print(f"Usage: {sys.argv[0]} epsilon INTERNAL_LAYER_SIZES epochs [input_size]\n");
     sys.exit(1)
 
 epsilon=float(sys.argv[1])
@@ -223,6 +226,8 @@ epsilon=float(sys.argv[1])
 internal_layers=eval(sys.argv[2])
 
 epochs=int(sys.argv[3])
+
+input_size=int(sys.argv[4])
 
 print(f"Running with internal layer dimensions: {internal_layers}")
 
@@ -240,4 +245,5 @@ script(
     #loss='sparse_trades_kl.1.5',
     loss='sparse_crossentropy',    
     augmentation='none',
-    INTERNAL_LAYER_SIZES=internal_layers)
+    INTERNAL_LAYER_SIZES=internal_layers,
+    input_size=input_size)

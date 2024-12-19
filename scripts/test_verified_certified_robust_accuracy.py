@@ -8,8 +8,8 @@ import os
 
 import sys
 
-if len(sys.argv) != 4:
-    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES certifier_results.json model_weights_csv_dir\n");
+if len(sys.argv) != 5:
+    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES certifier_results.json model_weights_csv_dir input_size\n");
     sys.exit(1)
 
 INTERNAL_LAYER_SIZES=eval(sys.argv[1])
@@ -18,13 +18,15 @@ json_results_file=sys.argv[2]
 
 csv_loc=sys.argv[3]+"/"
 
-print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
+input_size=int(sys.argv[4])
 
+print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
+print(f"Running with input size: {input_size}")
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Flatten, Dense
 
-inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, internal_layer_sizes=INTERNAL_LAYER_SIZES)
+inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, input_size=input_size, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 model = Model(inputs, outputs)
 
 print("Building zero-bias gloro model from saved weights...")
@@ -35,7 +37,7 @@ doitlib.load_and_set_weights(csv_loc, INTERNAL_LAYER_SIZES, model)
 print("Evaluating the resulting zero-bias gloro model...")
 
 
-x_test, y_test = doitlib.load_mnist_test_data()
+x_test, y_test = doitlib.load_mnist_test_data(input_size=input_size)
 
 loss, accuracy = model.evaluate(x_test, y_test, verbose=2)
 
