@@ -19,14 +19,14 @@ from keras.models import Model
 from keras.preprocessing.image import ImageDataGenerator
 from keras.regularizers import l2
 
-from art.attacks.evasion import ProjectedGradientDescent
+from art.attacks.evasion import ProjectedGradientDescent, AutoAttack, FastGradientMethod, MomentumIterativeMethod
 from art.estimators.classification import KerasClassifier
 from art.data_generators import KerasDataGenerator
 from art.defences.trainer import AdversarialTrainer
 from art.utils import load_dataset
 
-if len(sys.argv) != 6 and len(sys.argv) != 4:
-    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES model_weights_csv_dir epsilon [certifier_results.json disagree_output_dir]\n");
+if len(sys.argv) != 7 and len(sys.argv) != 5:
+    print(f"Usage: {sys.argv[0]} INTERNAL_LAYER_SIZES model_weights_csv_dir epsilon MAX_ITER [certifier_results.json disagree_output_dir]\n");
     sys.exit(1)
 
 INTERNAL_LAYER_SIZES=eval(sys.argv[1])
@@ -35,11 +35,13 @@ csv_loc=sys.argv[2]+"/"
 
 epsilon=float(sys.argv[3])
 
+MAX_ITER=int(sys.argv[4])
+
 json_results_file=None
 disagree_output_dir=None
-if len(sys.argv) == 6:
-    json_results_file=sys.argv[4]
-    disagree_output_dir=sys.argv[5]+"/"
+if len(sys.argv) == 7:
+    json_results_file=sys.argv[5]
+    disagree_output_dir=sys.argv[6]+"/"
 
     if os.path.exists(disagree_output_dir):
         raise FileExistsError(f"The directory '{disagree_output_dir}' already exists.")
@@ -47,7 +49,11 @@ if len(sys.argv) == 6:
 
 print(f"Running with internal layer dimensions: {INTERNAL_LAYER_SIZES}")
 
-print(f"Running PGD attack with epsilon: {epsilon}")
+print(f"Running attacks with epsilon: {epsilon}")
+
+print(f"MAX_ITER: {MAX_ITER}")
+
+
 
 # Define the model architecture
 inputs = Input((28, 28))
@@ -103,22 +109,43 @@ model.summary()
 x_test_pred = np.argmax(classifier.predict(x_test), axis=1)
 nb_correct_pred = np.sum(x_test_pred == np.argmax(y_test, axis=1))
 
-conservative_epsilon=epsilon#-0.0000001
+attacks = []
 
-pgd = ProjectedGradientDescent(classifier, norm=2, eps=conservative_epsilon, eps_step=0.01, max_iter=1000, num_random_init=True)
+#auto = AutoAttack(estimator=classifier, norm=2, eps=epsilon)
+#attacks.append(auto)
+NUM_RANDOM_INIT=1
+fast = FastGradientMethod(estimator=classifier, norm=2, eps=epsilon, num_random_init=NUM_RANDOM_INIT, eps_step=0.01, minimal=True, targeted=True)
+attacks.append(fast)
+fast2 = FastGradientMethod(estimator=classifier, norm=2, eps=epsilon, num_random_init=NUM_RANDOM_INIT, eps_step=0.01, minimal=True, targeted=False)
+attacks.append(fast2)
 
-# Create some adversarial samples for evaluation
-x_test_pgd = pgd.generate(x_test,y_test)
+momentum = MomentumIterativeMethod(estimator=classifier, norm=2, eps=epsilon, eps_step=0.01, max_iter=MAX_ITER, verbose=False, targeted=False)
+attacks.append(momentum)
+momentum2 = MomentumIterativeMethod(estimator=classifier, norm=2, eps=epsilon, eps_step=0.01, max_iter=MAX_ITER, verbose=False, targeted=True)
+attacks.append(momentum2)
 
-# Evaluate the model on the adversarial samples
-predict_pgd = model.predict(x_test_pgd)
-labels_pgd = np.argmax(predict_pgd, axis=1)
+pgd = ProjectedGradientDescent(classifier, norm=2, eps=epsilon, eps_step=0.01, max_iter=MAX_ITER, verbose=False, num_random_init=NUM_RANDOM_INIT, targeted=False)
+attacks.append(pgd)
+pgd2 = ProjectedGradientDescent(classifier, norm=2, eps=epsilon, eps_step=0.01, max_iter=MAX_ITER, verbose=False, num_random_init=NUM_RANDOM_INIT, targeted=True)
+attacks.append(pgd2)
 
-n=labels_pgd.shape[0]
-assert labels_pgd.shape[0] == x_test.shape[0]
 
-if disagree_output_dir is not None:
-    os.makedirs(disagree_output_dir)
+x_test_adv=[]
+predict_adv=[]
+labels_adv=[]
+for a in attacks:
+    print(f"Running attack {a}...")
+    s = a.generate(x_test,y_test)
+    # generate adversarial examples using the given attack
+    x_test_adv.append(s)
+    # Evaluate the model on the adversarial samples
+    p = model.predict(s)
+    predict_adv.append(p)
+    labels_adv.append(np.argmax(p, axis=1))
+
+n=labels_adv[0].shape[0]
+assert n == x_test.shape[0]
+
 
 robustness_log=[]
 
@@ -148,61 +175,68 @@ def l2_norm_mph(vector1, vector2):
 
 i=0
 while i<n:
-    if labels_pgd[i] != x_test_pred[i]:
-        # calculate the norm using arbitrary precision arithmetic to make sure it really is a valid attack
-        x_pgd_mph = vector_to_mph(x_test_pgd[i])
-        x_mph = vector_to_mph(x_test[i])        
-        l2_norm = l2_norm_mph(x_pgd_mph, x_mph)
-        if (l2_norm > epsilon):
-            if false_positive == 0:
-                max_fp_norm=l2_norm
-                min_fp_norm=l2_norm
-            else:
-                if max_fp_norm < l2_norm:
+    i_disagrees=False
+    for ai in range(len(attacks)):        
+        if labels_adv[ai][i] != x_test_pred[i]:
+            # calculate the norm using arbitrary precision arithmetic to make sure it really is a valid attack
+            x_adv_mph = vector_to_mph(x_test_adv[ai][i])
+            x_mph = vector_to_mph(x_test[i])        
+            l2_norm = l2_norm_mph(x_adv_mph, x_mph)
+            if (l2_norm > epsilon):
+                if false_positive == 0:
                     max_fp_norm=l2_norm
-                if min_fp_norm > l2_norm:
                     min_fp_norm=l2_norm
-            false_positive=false_positive+1
-        else:
-            if disagree == 0:
-                max_disagree_norm=l2_norm
-                min_disagree_norm=l2_norm
+                else:
+                    if max_fp_norm < l2_norm:
+                        max_fp_norm=l2_norm
+                    if min_fp_norm > l2_norm:
+                        min_fp_norm=l2_norm
+                # FIXME: at the moment we are double counting false positives across the different attacks!
+                false_positive=false_positive+1
             else:
-                if max_disagree_norm < l2_norm:
+                # first disagreement
+                if disagree == 0 and not i_disagrees:
                     max_disagree_norm=l2_norm
-                if min_disagree_norm > l2_norm:
                     min_disagree_norm=l2_norm
-            # found a successful attack
-            disagree=disagree+1
+                else:
+                    if max_disagree_norm < l2_norm:
+                        max_disagree_norm=l2_norm
+                    if min_disagree_norm > l2_norm:
+                        min_disagree_norm=l2_norm
+                # this is not a false positive
+                i_disagrees=True        
             
-            
-            if robustness!=[]:
+                if robustness!=[]:
 
-                r = robustness[i]
-                robust = r["certified"]
+                    r = robustness[i]
+                    robust = r["certified"]
 
-                if robust:
-                    # found an attack when the certifier said the output was robust!
-                    unsound=unsound+1
-                    x=x_test[i]
-                    x_pgd=x_test_pgd[i]
-                    lab_y=x_test_pred[i]                
-                    y_pgd=predict_pgd[i]
-                    lab_y_pgd=np.argmax(y_pgd, axis=0)
-                    input_path = os.path.join(disagree_output_dir, f"input_{i}.npy")
-                    np.savetxt(disagree_output_dir+f"/unsound_{i}_x.csv", x, delimiter=',', fmt='%f')
-                    np.savetxt(disagree_output_dir+f"/unsound_{i}_x_pgd.csv", x_pgd, delimiter=',', fmt='%f')
-                    with open(disagree_output_dir+f"/unsound_{i}_summary.txt", "w") as f:
-                        f.write(f"L2 Norm    : {l2_norm}\n")
-                        f.write(f"Y label    : {lab_y}\n")                    
-                        f.write(f"Y PGD      : {y_pgd}\n")
-                        f.write(f"Y PGD label: {lab_y_pgd}\n")
+                    if robust:
+                        # found an attack when the certifier said the output was robust!
+                        unsound=unsound+1
+                        x=x_test[i]
+                        x_adv=x_test_adv[ai][i]
+                        lab_y=x_test_pred[i]                
+                        y_adv=predict_adv[ai][i]
+                        lab_y_adv=np.argmax(y_adv, axis=0)
+                        if disagree_output_dir is not None:
+                            os.makedirs(disagree_output_dir)
+                        input_path = os.path.join(disagree_output_dir, f"input_{i}.npy")
+                        np.savetxt(disagree_output_dir+f"/unsound_{i}_x.csv", x, delimiter=',', fmt='%f')
+                        np.savetxt(disagree_output_dir+f"/unsound_{i}_x_adv.csv", x_pgd, delimiter=',', fmt='%f')
+                        with open(disagree_output_dir+f"/unsound_{i}_summary.txt", "w") as f:
+                            f.write(f"L2 Norm    : {l2_norm}\n")
+                            f.write(f"Y label    : {lab_y}\n")                    
+                            f.write(f"Y PGD      : {y_pgd}\n")
+                            f.write(f"Y PGD label: {lab_y_pgd}\n")
+    if i_disagrees:
+        disagree=disagree+1
     i=i+1
 
 agree=n-disagree
 print(f"Model accuracy: {nb_correct_pred/x_test.shape[0] * 100}")
 
-assert(agree >= np.sum(labels_pgd == labels_true))
+#assert(agree >= np.sum(labels_pgd == labels_true))
 
 print("Accuracy on PGD adversarial samples: %.2f%%" % (agree / n * 100))
 if disagree > 0:
