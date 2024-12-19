@@ -9,6 +9,8 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 
+import doitlib
+
 import tensorflow as tf
 from gloro.utils import print_if_verbose
 from utils import get_data
@@ -47,16 +49,13 @@ def train_gloro(
     # Load data and set up data pipeline.
     _print('loading data...')
 
-    train, test, metadata = get_data(dataset, batch_size, augmentation)
-
+    train, test = doitlib.load_mnist_gloro_data(batch_size=batch_size)
+    
+    
     # Create the model.
     _print('creating model...')
 
-    inputs = Input((28, 28))
-    z = Flatten()(inputs)
-    for size in INTERNAL_LAYER_SIZES:
-        z = Dense(size, activation='relu')(z)
-    outputs = Dense(10)(z)
+    inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 
     g = GloroNet(inputs, outputs, epsilon)
 
@@ -202,21 +201,12 @@ def script(
         
     print('model weights and biases extracted.')
 
-    
-    print("evaluating the model against testing dataset...")
-    train, ds_test, metadata = get_data(dataset, batch_size, augmentation)
-
-    eval_results = g.evaluate(ds_test)
-
-    eval_accuracy = eval_results[1]
-    print(f"model evaluation accuracy: {eval_accuracy}.")
 
 
     print("SUMMARY")
     print(f"lr_schedule: {lr_schedule}")
     print(f"epsilon: {epsilon}")
     print(f"dense layer sizes: {INTERNAL_LAYER_SIZES}")
-    print(f"accuracy: {eval_accuracy}")
     print(f"lipschitz constants: {lipschitz_constants}")
     
     # At the end of your script

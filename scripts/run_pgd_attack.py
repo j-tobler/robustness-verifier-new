@@ -9,6 +9,7 @@ tf.compat.v1.disable_eager_execution()
 # artibtrary precision math
 from mpmath import mp, mpf, sqrt
 
+import doitlib
 import os
 import json
 import sys
@@ -54,48 +55,15 @@ print(f"Running attacks with epsilon: {epsilon}")
 print(f"MAX_ITER: {MAX_ITER}")
 
 
-
-# Define the model architecture
-inputs = Input((28, 28))
-z = Flatten()(inputs)
-for size in INTERNAL_LAYER_SIZES:
-    z = Dense(size, activation='relu')(z)
-outputs = Dense(10)(z)
+inputs, outputs = doitlib.build_mnist_model(Input, Flatten, Dense, internal_layer_sizes=INTERNAL_LAYER_SIZES)
 model = Model(inputs, outputs)
 
 print("Building zero-bias gloro model from saved weights...")
 
 
-dense_weights = []
-dense_biases = []
-dense_zero_biases = []
-i=0
-# always one extra iteration than INTERNAL_LAYER_SIZES length
-while i<=len(INTERNAL_LAYER_SIZES):
-    dense_weights.append(np.loadtxt(csv_loc+f"layer_{i}_weights.csv", delimiter=","))
-    dense_biases.append(np.loadtxt(csv_loc+f"layer_{i}_biases.csv", delimiter=","))
-    dense_zero_biases.append(np.zeros_like(dense_biases[i]))
+doitlib.load_and_set_weights(csv_loc, INTERNAL_LAYER_SIZES, model)
 
-    model.layers[i+2].set_weights([dense_weights[i], dense_zero_biases[i]])
-    i=i+1
-
-
-
-
-
-# Step 3: Compile the model
-model.compile(optimizer='adam', 
-              loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True), 
-              metrics=['accuracy'])
-
-# Step 2: Load and preprocess the MNIST dataset
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-
-# Normalize pixel values to [0, 1]
-x_test = x_test.astype('float32') / 255.0
-
-# Convert labels to one-hot encoded format
-y_test = tf.keras.utils.to_categorical(y_test, num_classes=10)
+x_test, y_test = doitlib.load_mnist_test_data()
 
 labels_true = np.argmax(y_test, axis=1)
 
