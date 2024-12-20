@@ -2,13 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 
-if len(sys.argv) != 4:
-    print(f"Usage: {sys.argv[0]} csv_file upper_bound_txt_file output_pdf_file")
+if len(sys.argv) != 5:
+    print(f"Usage: {sys.argv[0]} graph_title csv_file upper_bound_txt_file output_pdf_file")
     sys.exit(1)
 
-csv_file=sys.argv[1]
-upper_bound_txt_file=sys.argv[2]
-pdf_file=sys.argv[3]
+graph_title=sys.argv[1]
+csv_file=sys.argv[2]
+upper_bound_txt_file=sys.argv[3]
+pdf_file=sys.argv[4]
 
 upper_bound=0.0
 with open(upper_bound_txt_file, 'r') as f:
@@ -28,19 +29,20 @@ ax1.set_xlabel("Gram Iterations")
 ax1.set_ylabel("Robustness Proportion")
 ax1.tick_params(axis='y', labelcolor="blue")
 
-ax1.axhline(upper_bound, color="blue", linestyle="--", label=f"Measured Robustness")
+ax1.axhline(upper_bound, color="blue", linestyle="--", label=f"Measured Robustness ({upper_bound})")
 
 
 ax2 = ax1.twinx()
-ax2.plot(x, y2, label="Bounds Computation Time", color="green")
+ax2.plot(x, y2, label="Bounds Computation Time", color="green", linestyle='-.')
 ax2.set_ylabel("Running Time (seconds)", color="green")
 ax2.tick_params(axis='y', labelcolor="green")
-
-plt.title("Robustness vs Gram Iterations (7x7 MNIST)")
+y2max = y2.max()
+ax2.set_ylim(0.0,y2max*1.1)
+plt.title(graph_title)
 ax2.legend(loc="upper right")
 ax1.legend(loc="upper left")
 
-plt.grid()
+#plt.grid()
 
 plt.savefig(pdf_file, format="pdf", bbox_inches="tight")
 
