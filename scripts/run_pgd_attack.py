@@ -116,7 +116,10 @@ predict_adv=[]
 labels_adv=[]
 for a in attacks:
     print(f"Running attack {a}...")
-    s = a.generate(x_test,y_test)
+    if a.targeted:
+        s = a.generate(x_test,y_test)
+    else:
+        s = a.generate(x_test)
     # generate adversarial examples using the given attack
     x_test_adv.append(s)
     # Evaluate the model on the adversarial samples

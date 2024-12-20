@@ -22,19 +22,19 @@ x = data.iloc[:, 0]  # First column for x-values
 y = data.iloc[:, 1]  # Second column for y-values
 y2 = data.iloc[:, 2]  # Third column for the second y-axis
 
-fig, ax1 = plt.subplots(figsize=(8, 6))
-ax1.plot(x, y, label="Certified Robustness", color="blue")
+fig, ax1 = plt.subplots(figsize=(5, 5))
+ax1.plot(x, y, label="Certified", color="blue")
 ax1.set_ylim(0.0,1.0)
 ax1.set_xlabel("Gram Iterations")
 ax1.set_ylabel("Robustness Proportion")
 ax1.tick_params(axis='y', labelcolor="blue")
 
-ax1.axhline(upper_bound, color="blue", linestyle="--", label=f"Measured Robustness ({upper_bound})")
+ax1.axhline(upper_bound, color="blue", linestyle="--", label=f"Measured ({upper_bound})")
 
 
 ax2 = ax1.twinx()
-ax2.plot(x, y2, label="Bounds Computation Time", color="green", linestyle='-.')
-ax2.set_ylabel("Running Time (seconds)", color="green")
+ax2.plot(x, y2, label="Time", color="green", linestyle='-.')
+ax2.set_ylabel("Seconds to Compute Bounds", color="green")
 ax2.tick_params(axis='y', labelcolor="green")
 y2max = y2.max()
 ax2.set_ylim(0.0,y2max*1.1)
