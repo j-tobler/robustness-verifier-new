@@ -141,7 +141,7 @@ sed "s/$/ ${EVAL_EPSILON}/" "$MODEL_OUTPUTS" > "$MODEL_OUTPUTS_EVAL"
 
 
 echo "Running the certifier. This may take a while..."
-cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" | tee "$RESULTS_JSON" | ts
+cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" | tee "$RESULTS_JSON" | ts "%Y-%m-%d %H:%M:%S"
 
 if ! jq empty "$RESULTS_JSON"; then
     echo "Certifier produced invalid JSON!"

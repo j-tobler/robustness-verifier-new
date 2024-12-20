@@ -19,19 +19,27 @@ data = pd.read_csv(file_path)
 
 x = data.iloc[:, 0]  # First column for x-values
 y = data.iloc[:, 1]  # Second column for y-values
+y2 = data.iloc[:, 2]  # Third column for the second y-axis
 
-plt.figure(figsize=(8, 6))
-plt.plot(x, y, label="Certified Robustness", color="blue")
+fig, ax1 = plt.subplots(figsize=(8, 6))
+ax1.plot(x, y, label="Certified Robustness", color="blue")
+ax1.set_ylim(0.0,1.0)
+ax1.set_xlabel("Gram Iterations")
+ax1.set_ylabel("Robustness Proportion")
+ax1.tick_params(axis='y', labelcolor="blue")
 
-plt.axhline(upper_bound, color="red", linestyle="--", label=f"Measured Robustness")
+ax1.axhline(upper_bound, color="blue", linestyle="--", label=f"Measured Robustness")
 
-plt.ylim(0.0,1.0)
 
-# Add labels, legend, and title
-plt.xlabel("Gram Iterations")  # Replace with your actual label
-plt.ylabel("Robustness")  # Replace with your actual label
+ax2 = ax1.twinx()
+ax2.plot(x, y2, label="Bounds Computation Time", color="green")
+ax2.set_ylabel("Running Time (seconds)", color="green")
+ax2.tick_params(axis='y', labelcolor="green")
+
 plt.title("Robustness vs Gram Iterations (7x7 MNIST)")
-plt.legend()
+ax2.legend(loc="upper right")
+ax1.legend(loc="upper left")
+
 plt.grid()
 
 plt.savefig(pdf_file, format="pdf", bbox_inches="tight")
