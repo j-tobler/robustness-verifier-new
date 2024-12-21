@@ -100,7 +100,7 @@ echo "Artifacts and results will live in: ${DT}/"
 echo ""
 
 PARAMS_FILE=${DT}/params.txt
-echo "    (Global) Model input size: ${INPUT_SIZE}" > "${PARAMS_FILE}"
+echo "    (Global) Model input size: ${INPUT_SIZE}x${INPUT_SIZE}" > "${PARAMS_FILE}"
 echo "    (Training) Gloro epsilon: ${EPSILON}" >> "${PARAMS_FILE}"
 echo "    (Training) INTERNAL_LAYER_SIZES: ${INTERNAL_LAYER_SIZES}" >> "${PARAMS_FILE}"
 echo "    (Training) Epochs: ${EPOCHS}" >> "${PARAMS_FILE}"
@@ -141,18 +141,32 @@ sed "s/$/ ${EVAL_EPSILON}/" "$MODEL_OUTPUTS" > "$MODEL_OUTPUTS_EVAL"
 
 
 echo "Running the certifier. This may take a while..."
-cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" | tee "$RESULTS_JSON" | ts "%Y-%m-%d %H:%M:%S"
+cat "$MODEL_OUTPUTS_EVAL" | ${CERTIFIER} "$NEURAL_NET_FILE" "$GRAM_ITERATIONS" | tee "$RESULTS_JSON" | ts "%Y-%m-%d %H:%M:%S" | tee "${RESULTS_JSON}.timestamps"
 
 if ! jq empty "$RESULTS_JSON"; then
     echo "Certifier produced invalid JSON!"
     exit 1
 fi
-    
+
+
 ${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR" $INPUT_SIZE
+
+# get timestamps
+CERTIFIER_FINISH_TIME=$(grep '\]$' "${RESULTS_JSON}.timestamps" | cut -d' ' -f-2)
+CERTIFIER_START_TIME=$(grep '\[$' "${RESULTS_JSON}.timestamps" | cut -d' ' -f-2)
+LIPSCHITZ_BOUNDS_TIME=$(grep 'lipschitz\_bounds' "${RESULTS_JSON}.timestamps" | cut -d' ' -f-2)
+
+echo ""
+echo "Certifier started at:         ${CERTIFIER_START_TIME}"
+echo "Certifier produced bounds at: ${LIPSCHITZ_BOUNDS_TIME}"
+echo "(The difference between these quantities is therefore the time taken to compute those bounds.)"
+echo "Certifier finished at: ${CERTIFIER_FINISH_TIME}"
 
 
 echo ""
 echo "All done."
+echo "Artifacts and results all saved in: ${DT}/"
+echo "Parameters saved in: ${PARAMS_FILE}, whose contents follows:"
 cat "$PARAMS_FILE"
 echo ""
 echo "Model weights saved in: ${MODEL_WEIGHTS_DIR}"
@@ -160,5 +174,5 @@ echo "Model outputs saved in: ${MODEL_OUTPUTS}"
 echo "Neural network (for certifier) saved in: ${NEURAL_NET_FILE}"
 echo "Model outputs for evaluation saved in: ${MODEL_OUTPUTS_EVAL}"
 echo "Certified robustness results saved in: ${RESULTS_JSON}"
-
+echo "Timestamped certifier output saved in: ${RESULTS_JSON}.timestamps"
 
