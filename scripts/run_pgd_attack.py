@@ -81,8 +81,23 @@ batch_size = 50
 classifier = KerasClassifier(model, clip_values=(0.0,1.0), use_logits=False)
 model.summary()
 
-x_test_pred = np.argmax(classifier.predict(x_test), axis=1)
+x_test_pred_vecs = classifier.predict(x_test)
+x_test_pred = np.argmax(x_test_pred_vecs, axis=1)
 nb_correct_pred = np.sum(x_test_pred == np.argmax(y_test, axis=1))
+
+# build a list of targets for targeted attacks
+targets = []
+for i in range(len(x_test_pred)):
+    t = None
+    if x_test_pred[i] != labels_true[i]:
+        # prefer the true label where applicable
+        t = labels_true[i]
+    else:
+        # otherwise, pick the second highest
+        indexed_vector = sorted(enumerate(x_test_pred_vecs[i]), key=lambda x: x[1], reverse=True)
+        t = indexed_vector[1][0]
+    targets.append(t)
+targets = np.array(targets)
 
 attacks = []
 
@@ -117,7 +132,7 @@ labels_adv=[]
 for a in attacks:
     print(f"Running attack {a}...")
     if a.targeted:
-        s = a.generate(x_test,y_test)
+        s = a.generate(x_test,targets)
     else:
         s = a.generate(x_test)
     # generate adversarial examples using the given attack
