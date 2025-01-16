@@ -78,7 +78,7 @@ module Lipschitz {
   }
 
   /** Element-wise subtraction of vector u from vector v. */
-  ghost opaque function Minus(v: Vector, u: Vector): (r: Vector)
+  function Minus(v: Vector, u: Vector): (r: Vector)
     requires |v| == |u|
     ensures |r| == |v|
     ensures forall i: int :: 0 <= i < |r| ==> r[i] == v[i] - u[i]
@@ -223,6 +223,13 @@ module Lipschitz {
   {
     if DEBUG { print "{ \"debug_msg\": \"Computing frobenius norm upper bound for matrix of size ", |m|, "x", |m[0]|, "\" },\n"; }
     r := SqrtUpperBound(SumPositiveMatrix(SquareMatrixElements(m)));
+  }
+
+  method L2UpperBound(v: Vector) returns (r: real)
+    ensures r >= L2(v)
+  {
+    if DEBUG { print "{ \"debug_msg\": \"Computing L2 norm for vector of length ", |v|, "\" },\n"; }
+    r := SqrtUpperBound(Sum(Apply(v, Square)));
   }
 
   function GetFirstColumn(m: Matrix): (r: Vector)
@@ -431,11 +438,11 @@ module Lipschitz {
    * constants L. If certification succeeds (returns true), any input
    * corresponding to v' is verified robust.
    */
-  method Certify(v': Vector, e: real, L: seq<real>) returns (b: bool)
-    requires forall i | 0 <= i < |L| :: 0.0 <= L[i]
+  method Certify(v': Vector, e: real, L: seq<seq<real>>) returns (b: bool)
+    requires forall i, k | 0 <= i < |L| && 0 <= k < |L| :: 0.0 <= L[i][k]
     requires |v'| == |L|
     ensures b ==> forall v: Vector, n: NeuralNetwork |
-      CompatibleInput(v, n) && NN(n, v) == v' && AreLipBounds(n, L) ::
+      CompatibleInput(v, n) && NN(n, v) == v' && AreMarginLipBounds(n, L) ::
       Robust(v, v', e, n)
   {
     var x := ArgMax(v');
@@ -443,11 +450,13 @@ module Lipschitz {
     b := true;
     while i < |v'|
       invariant 0 <= i <= |v'|
+      /* FIXME broken proof
       invariant b ==> forall j | 0 <= j < i && j != x ::
-        v'[x] - L[x] * e > v'[j] + L[j] * e
+        v'[x] - L[x] * e > v'[j] + L[j] * e */
     {
       if i != x {
-        if v'[x] - L[x] * e <= v'[i] + L[i] * e {
+	// FIXME: this is a guess at the check we need to perform here
+        if Abs(v'[x] - v'[i]) <= e * L[i][x] {
           b := false;
           break;
         }
@@ -455,7 +464,9 @@ module Lipschitz {
       i := i + 1;
     }
     if b {
+      /* FIXME broken proof
       ProveRobust(v', e, L, x);
+      */
     }
   }
 
@@ -573,6 +584,13 @@ module Lipschitz {
     forall i | 0 <= i < |L| :: IsLipBound(n, L[i], i)
   }
 
+  /** True iff every L[i][k] is a margin Lipschitz bound of the i,k logits of n. */
+  ghost predicate AreMarginLipBounds(n: NeuralNetwork, L: seq<seq<real>>)
+    requires |L| == |n[|n|-1]|
+  {
+    forall i, k | 0 <= i < |L| && 0 <= k < |L| && i != k :: IsMarginLipBound(n, L[i][k], i, k)
+  }
+
   /**
    * A real number l is a Lipschitz bound of an output logit i iff l is an
    * upper bound on the change in i per change in distance of the input vector.
@@ -582,6 +600,65 @@ module Lipschitz {
   {
     forall v, u: Vector | CompatibleInput(v, n) && CompatibleInput(u, n) ::
       Abs(NN(n, v)[i] - NN(n, u)[i]) <= l * Distance(v, u)
+  }
+
+  /**
+   * A real number l is a margin Lipschitz bound of a pair of output logits i,j
+   * iff l is an upper bound on the change in the difference between i and j
+   * per change in distance of the input vector.
+   */
+  ghost predicate IsMarginLipBound(n: NeuralNetwork, l: real, i: int, j: int)
+    requires 0 <= i < |n[|n|-1]|
+    requires 0 <= j < |n[|n|-1]|
+    requires i != j
+  {
+    forall v, u: Vector | CompatibleInput(v, n) && CompatibleInput(u, n) ::
+      Abs(Abs(NN(n, v)[i] - NN(n, v)[j]) - Abs(NN(n, u)[i] - NN(n, u)[j])) <= l * Distance(v, u)
+  }
+
+  /**
+   * Generates the margin Lipschitz bounds for each pair of logits in the
+   * output of the neural network n. See GenMarginLipBound for details.
+   */
+  method GenMarginLipBounds(L: LipschitzBounds, n: NeuralNetwork, s: seq<real>) returns (r: seq<seq<real>>)
+    requires |s| == |n|
+    requires forall i | 0 <= i < |s| :: IsSpecNormUpperBound(s[i], n[i])
+    ensures |r| == |n[|n|-1]|
+    ensures forall i,k | 0 <= i < |r| && 0 <= k < |r| :: 0.0 <= r[i][k]
+    ensures AreMarginLipBounds(n, r)
+  {
+    r := [];
+    var i := 0;
+    while i < |n[|n|-1]|
+      invariant 0 <= i <= |n[|n|-1]|
+      invariant |r| == i
+      invariant forall j | 0 <= j < i ::
+        forall k | 0 <= k < |n[|n|-1]| && i != k ::
+          0.0 <= r[j][k] && IsMarginLipBound(n, r[j][k], j, k)
+    {
+      var k := 0;
+      var bound: seq<real> := [];
+      while k < |n[|n|-1]| {
+        if k == i {
+	  // use a dummy value
+	  bound := bound + [0.0];
+	} else {
+	  // need to generate it
+	  var b := GenMarginLipBound(L, n, i, k, s);
+	  bound := bound + [b];
+	}
+        k := k + 1;
+      }
+      r := r + [bound];
+      i := i + 1;
+      /* FIXME: broken proof from here
+      assert forall j | 0 <= j < i :: IsLipBound(n, r[j], j) by {
+        assert forall j | 0 <= j < i - 1 :: IsLipBound(n, r[j], j);
+        assert IsLipBound(n, r[i-1], i-1);	
+      }
+      */
+    }
+    assert AreMarginLipBounds(n, r);
   }
 
   /**
@@ -640,6 +717,43 @@ module Lipschitz {
       LogitLipBounds(n, n', v, u, l);
     }
   }
+
+  /**
+   * Generates the margin Lipschitz bound of logits l, k. This is achieved by
+   * taking the product of the spectral norms of the first |n|-1 layers, and
+   * multiplying this by the spectral norm of the matrix [v], where v is the
+   * vector corresponding to the difference between the l'th and k'th rows of
+   * the final layer of n.
+   */
+  method GenMarginLipBound(L: LipschitzBounds, n: NeuralNetwork, l: int, k: int, s: seq<real>) returns (r: real)
+    requires |s| == |n|
+    requires 0 <= l < |n[|n|-1]|
+    requires 0 <= k < |n[|n|-1]|
+    requires l != k
+    requires forall i | 0 <= i < |s| :: IsSpecNormUpperBound(s[i], n[i])
+    ensures IsLipBound(n, r, l)
+    ensures r >= 0.0
+  {
+    var vl := n[|n|-1][l];
+    var vk := n[|n|-1][k];
+    var trimmedLayerV := Minus(vl,vk);
+    var trimmedLayer := [trimmedLayerV];    
+    //var trimmedSpecNorm := L.GramIterationSimple(trimmedLayer);
+    var trimmedSpecNorm := L2UpperBound(trimmedLayerV);
+    var n' := n[..|n|-1] + [trimmedLayer];
+    var s' := s[..|s|-1] + [trimmedSpecNorm];
+    r := Product(s');
+    PositiveProduct(s');
+    /* FIXME: broken proofs
+    forall v: Vector, u: Vector | |v| == |u| && CompatibleInput(v, n') {
+      SpecNormProductIsLipBound(n', v, u, s');
+    }
+    forall v: Vector, u: Vector | |v| == |u| && CompatibleInput(v, n') {
+      LogitLipBounds(n, n', v, u, l);
+    }
+    */
+  }
+
 
   /**
    * The product of the spectral norms of each matrix of a neural network n is

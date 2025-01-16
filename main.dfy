@@ -25,7 +25,7 @@ module MainModule {
     expect maybeNeuralNet.0, "Failed to parse neural network.";
     var neuralNet: NeuralNetwork := maybeNeuralNet.1;
 
-    var lipBounds: seq<real>;
+    var lipBounds: seq<seq<real>>;
     print "[\n";
     
     if StringUtils.IsInt(args[2]) {
@@ -42,7 +42,7 @@ module MainModule {
       // We currently assume an external implementation for generating these.
       var specNorms: seq<real> := GenerateSpecNorms(L, neuralNet);
       // Generate the Lipschitz bounds for each logit in the output vector.
-      lipBounds := GenLipBounds(L, neuralNet, specNorms);
+      lipBounds := GenMarginLipBounds(L, neuralNet, specNorms);
 
       print "{\n";
       print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
@@ -50,6 +50,10 @@ module MainModule {
       print "  \"provenance\": \"generated\"\n";
       print "}\n";      
     }else{
+      print "Reading margin lipschitz bounds from a file not (currently) supported\n";
+      return;
+
+      /*
       var lipBoundsStr: string := ReadFromFile(args[2]);
       var lb: seq<string> := StringUtils.Split(lipBoundsStr,'\n');
       var line: string := lb[0];
@@ -71,7 +75,8 @@ module MainModule {
       print "{\n";
       print "  \"lipschitz_bounds\": ", lipBounds, ",\n";
       print "  \"provenance\": \"loaded from file\"\n";
-      print "}\n";      
+      print "}\n";
+      */
     }
 
     /* ================= Repeatedly certify output vectors ================= */
