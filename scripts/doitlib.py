@@ -8,23 +8,18 @@ def build_mnist_model(Input, Flatten, Dense, input_size=28, internal_layer_sizes
     inputs = Input((input_size, input_size))
     z = Flatten()(inputs)
     for size in internal_layer_sizes:
-        z = Dense(size, activation='relu')(z)
-    outputs = Dense(10)(z)
+        z = Dense(size, use_bias=False, activation='relu')(z)
+    outputs = Dense(10, use_bias=False)(z)
     return (inputs, outputs)
 
 def load_and_set_weights(csv_loc, internal_layer_sizes, model):
     """model should already be built. This will compile it too"""
     dense_weights = []
-    dense_biases = []
-    dense_zero_biases = []
     i=0
     # always one extra iteration than internal_layer_sizes length
     while i<=len(internal_layer_sizes):
         dense_weights.append(np.loadtxt(csv_loc+f"layer_{i}_weights.csv", delimiter=","))
-        dense_biases.append(np.loadtxt(csv_loc+f"layer_{i}_biases.csv", delimiter=","))
-        dense_zero_biases.append(np.zeros_like(dense_biases[i]))
-
-        model.layers[i+2].set_weights([dense_weights[i], dense_zero_biases[i]])
+        model.layers[i+2].set_weights([dense_weights[i]])
         i=i+1
         
     model.compile(optimizer='adam', 

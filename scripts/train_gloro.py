@@ -177,16 +177,14 @@ def script(
     
     print('model summary saved.')
 
-    print('extracting and saving model weights and biases...')
-    # Extract weights and biases
-    weights_and_biases = [
-        (layer.get_weights()[0], layer.get_weights()[1])
-        for layer in g.layers if len(layer.get_weights()) > 0]
+    layer_weights = [layer.get_weights()[0] for layer in g.layers if len(layer.get_weights()) > 0]
+
+    assert (len(layer_weights) == len(INTERNAL_LAYER_SIZES)+1)
             
     lipschitz_constants = [layer.lipschitz() for layer in g.layers if isinstance(layer,Dense)]
-    
-    for i, (weights, biases) in enumerate(weights_and_biases):
-        np.savez(f"layer_{i}_weights_biases.npz", weights=weights, biases=biases)
+
+    for i, weights in enumerate(layer_weights):
+        np.savez(f"layer_{i}_weights.npz", weights=weights)
 
     # Create a directory to save the files if it does not exist
     save_dir = 'model_weights_csv'
@@ -194,15 +192,14 @@ def script(
         os.makedirs(save_dir)
 
     # Loop through each layer, extract weights and biases, and save them
-    for i, (weights, biases) in enumerate(weights_and_biases):
+    for i, weights in enumerate(layer_weights):
         np.savetxt(os.path.join(save_dir, f'layer_{i}_weights.csv'), weights, delimiter=',', fmt='%f')
-        np.savetxt(os.path.join(save_dir, f'layer_{i}_biases.csv'), biases, delimiter=',', fmt='%f')
 
     # Loop through each layer, extract weights and biases, and save them
     for i, c in enumerate(lipschitz_constants):
         np.savetxt(os.path.join(save_dir, f'layer_{i}_lipschitz.csv'), [c], delimiter=',', fmt='%f')
         
-    print('model weights and biases extracted.')
+    print('model weights extracted.')
 
 
 
