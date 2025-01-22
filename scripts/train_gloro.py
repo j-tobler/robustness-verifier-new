@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import doitlib
+import json
 
 import tensorflow as tf
 from gloro.utils import print_if_verbose
@@ -25,7 +26,8 @@ from tensorflow.keras import backend as K
 from gloro.training.callbacks import EpsilonScheduler
 from gloro.training.callbacks import LrScheduler
 from gloro.training.callbacks import TradesScheduler
-from gloro.training.metrics import rejection_rate
+from gloro.training.metrics import rejection_rate, vra, clean_acc
+
 from sklearn.metrics import confusion_matrix
 
 
@@ -181,7 +183,7 @@ def script(
 
     assert (len(layer_weights) == len(INTERNAL_LAYER_SIZES)+1)
             
-    lipschitz_constants = [layer.lipschitz() for layer in g.layers if isinstance(layer,Dense)]
+    lipschitz_constants = g.lipschitz_constant()
 
     for i, weights in enumerate(layer_weights):
         np.savez(f"layer_{i}_weights.npz", weights=weights)
@@ -197,17 +199,41 @@ def script(
 
     # Loop through each layer, extract weights and biases, and save them
     for i, c in enumerate(lipschitz_constants):
-        np.savetxt(os.path.join(save_dir, f'layer_{i}_lipschitz.csv'), [c], delimiter=',', fmt='%f')
+        np.savetxt(os.path.join(save_dir, f'logit_{i}_gloro_lipschitz.csv'), [c], delimiter=',', fmt='%f')
         
     print('model weights extracted.')
 
 
+    # compute the model's clean accuracy and robustness (rejection rate) via the gloro methods
+    x_test, y_test = doitlib.load_mnist_test_data(input_size)
+    y_pred = g.predict(x_test)
+    accuracy = float(clean_acc(y_test, y_pred).numpy())
+    reject_rate = float(rejection_rate(y_test, y_pred).numpy())
+    robustness = 1.0 - reject_rate
+    the_vra = float(vra(y_test, y_pred).numpy())
 
+    # save the statistics calculated by gloro
+    data = {
+        "comment": "these statistics are unverified and calculated by the gloro implementation",
+        "accuracy": accuracy,
+        "rejection_rate": reject_rate,
+        "robustness": robustness,
+        "vra": the_vra
+    }
+    file_path = os.path.join(save_dir, "gloro_model_stats.json")
+    with open(file_path, "w") as json_file:
+        json.dump(data, json_file, indent=4)
+
+    
     print("SUMMARY")
     print(f"lr_schedule: {lr_schedule}")
     print(f"epsilon: {epsilon}")
     print(f"dense layer sizes: {INTERNAL_LAYER_SIZES}")
-    print(f"lipschitz constants: {lipschitz_constants}")
+    print(f"(gloro) lipschitz constants: {lipschitz_constants}")
+    print(f"(gloro) (clean) accuracy: {accuracy}")
+    print(f"(gloro) robustness (1 - rejection rate): {robustness}")
+    print(f"(gloro) rejection rate: {reject_rate}")    
+    print(f"(gloro) VRA: {the_vra}")
     
     # At the end of your script
     K.clear_session()

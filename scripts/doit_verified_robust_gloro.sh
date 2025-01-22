@@ -151,6 +151,10 @@ fi
 
 ${PYTHON} test_verified_certified_robust_accuracy.py "$INTERNAL_LAYER_SIZES" "$RESULTS_JSON" "$MODEL_WEIGHTS_DIR" $INPUT_SIZE
 
+echo ""
+echo "Unverified model statistics (to compare to the above verified ones):"
+cat "${MODEL_WEIGHTS_DIR}/gloro_model_stats.json"
+
 # get timestamps
 CERTIFIER_FINISH_TIME=$(grep '\]$' "${RESULTS_JSON}.timestamps" | cut -d' ' -f-2)
 CERTIFIER_START_TIME=$(grep '\[$' "${RESULTS_JSON}.timestamps" | cut -d' ' -f-2)
@@ -169,7 +173,8 @@ echo "Artifacts and results all saved in: ${DT}/"
 echo "Parameters saved in: ${PARAMS_FILE}, whose contents follows:"
 cat "$PARAMS_FILE"
 echo ""
-echo "Model weights saved in: ${MODEL_WEIGHTS_DIR}"
+echo "Model weights and (unverified) gloro lipschitz constants saved in: ${MODEL_WEIGHTS_DIR}"
+echo "(Unverified) gloro model statistics saved in: ${MODEL_WEIGHTS_DIR}/gloro_model_stats.json"
 echo "Model outputs saved in: ${MODEL_OUTPUTS}"
 echo "Neural network (for certifier) saved in: ${NEURAL_NET_FILE}"
 echo "Model outputs for evaluation saved in: ${MODEL_OUTPUTS_EVAL}"
